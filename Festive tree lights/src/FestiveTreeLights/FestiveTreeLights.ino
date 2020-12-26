@@ -1,3 +1,5 @@
+#include "Sleep_n0m1.h"
+
 #include "WorkState.h"
 
 // The festive tree light will have 5 LED colors: red, amber, green, blue and white.
@@ -30,7 +32,7 @@
 #define WHITE_LED_MIN_BRIGHTNESS 0
 #define WHITE_LED_MAX_BRIGHTNESS 255
 
-#define PWM_ANIMATION_INTERVAL 50
+#define PWM_ANIMATION_INTERVAL 30
 
 void setAnalogLedStates(uint8_t red, uint8_t amber, uint8_t green, uint8_t blue, uint8_t white) {
   analogWrite(RED_LED_PIN, red);
@@ -621,6 +623,7 @@ class SwitchingController : public ILedController {
 
     ILedController* getControllerByIndex(uint8_t index) {
       switch (index) {
+        // TODO: fix order after debugging
         case 0:
           return &slowTwoLedCombinationsControllerLoop;
 
@@ -698,6 +701,8 @@ class SwitchingController : public ILedController {
 
 SwitchingController mainController;
 
+Sleep sleep;
+
 void setup() {
   pinMode(RED_LED_PIN, OUTPUT);
   pinMode(AMBER_LED_PIN, OUTPUT);
@@ -706,6 +711,8 @@ void setup() {
   pinMode(WHITE_LED_PIN, OUTPUT);
 
   pinMode(STATUS_LED_PIN, OUTPUT);
+
+  sleep.idleMode();
 }
 
 void loop() {
@@ -714,12 +721,9 @@ void loop() {
   uint32_t sleepTime = 0;
 
   do {
-    digitalWrite(STATUS_LED_PIN, HIGH);
     WorkState result = mainController.doControl(sleepTime);
     sleepTime = result.suggestedSleepTime;
-    digitalWrite(STATUS_LED_PIN, LOW);
-
-    // TODO: replace this delay() with some library that will initiate deep sleep?
-    delay(sleepTime);
+    
+    sleep.sleepDelay(sleepTime);
   } while(true);
 }
