@@ -24,15 +24,15 @@
 #define AMBER_LED_MAX_BRIGHTNESS 255
 
 #define GREEN_LED_MIN_BRIGHTNESS 0
-#define GREEN_LED_MAX_BRIGHTNESS 255
+#define GREEN_LED_MAX_BRIGHTNESS 150
 
 #define BLUE_LED_MIN_BRIGHTNESS 0
-#define BLUE_LED_MAX_BRIGHTNESS 255
+#define BLUE_LED_MAX_BRIGHTNESS 170
 
 #define WHITE_LED_MIN_BRIGHTNESS 0
-#define WHITE_LED_MAX_BRIGHTNESS 255
+#define WHITE_LED_MAX_BRIGHTNESS 140
 
-#define PWM_ANIMATION_INTERVAL 30
+#define PWM_ANIMATION_INTERVAL 15
 
 void setAnalogLedStates(uint8_t red, uint8_t amber, uint8_t green, uint8_t blue, uint8_t white) {
   analogWrite(RED_LED_PIN, red);
@@ -235,7 +235,67 @@ class StatefulController : public ILedController {
     }
 };
 
-class TwoLedCombinationsController : public StatefulController {
+class CombinationController : public StatefulController {
+  private:
+    uint32_t _iterationDuration;
+    uint32_t _transitionDuration;
+
+    AnalogLedsState getLedStatesForState(uint8_t stateIndex) {
+      if (stateIndex >= 10) {
+        stateIndex -= 10;
+      }
+
+      switch (stateIndex) {
+        case 0:
+          return analogLedsState(1.0, 1.0, 0.0, 0.0, 0.0); // RA***
+
+        case 1:
+          return analogLedsState(1.0, 1.0, 1.0, 0.0, 0.0); // RAG**
+
+        case 2:
+          return analogLedsState(0.0, 1.0, 1.0, 0.0, 0.0); // *AG**
+
+        case 3:
+          return analogLedsState(0.0, 1.0, 1.0, 1.0, 0.0); // *AGB*
+
+        case 4:
+          return analogLedsState(0.0, 0.0, 1.0, 1.0, 0.0); // **GB*
+
+        case 5:
+          return analogLedsState(0.0, 0.0, 1.0, 1.0, 1.0); // **GBW
+
+        case 6:
+          return analogLedsState(0.0, 0.0, 0.0, 1.0, 1.0); // ***BW
+
+        case 7:
+          return analogLedsState(1.0, 0.0, 0.0, 1.0, 1.0); // R**BW
+
+        case 8:
+          return analogLedsState(1.0, 0.0, 0.0, 0.0, 1.0); // R***W
+
+        case 9:
+          return analogLedsState(1.0, 1.0, 0.0, 0.0, 1.0); // RA**W
+      }
+    }
+
+  protected:
+    virtual void applyLedStatesForState(uint8_t stateIndex) {
+      AnalogLedsState currentState = getLedStatesForState(stateIndex);
+      AnalogLedsState nextState = getLedStatesForState(stateIndex + 1);
+
+      startPwmTransition(_transitionDuration, currentState, nextState);
+    }
+
+    virtual uint32_t getStateDuration(uint8_t stateIndex) {
+      return _iterationDuration;
+    }
+
+  public:
+    CombinationController(uint32_t iterationDuration, uint32_t transitionDuration)
+      : StatefulController(10), _iterationDuration(iterationDuration), _transitionDuration(transitionDuration) {}
+};
+
+class FlowingTwoLedsController : public StatefulController {
   private:
     uint32_t _stateDuration;
   
@@ -247,89 +307,19 @@ class TwoLedCombinationsController : public StatefulController {
           break;
 
         case 1:
-          setDigitalLedStates(false, false, true, true, false); // **GB*
-          break;
-
-        case 2:
-          setDigitalLedStates(true, false, false, false, true); // R***W
-          break;
-
-        case 3:
           setDigitalLedStates(false, true, true, false, false); // *AG**
           break;
 
-        case 4:
+        case 2:
+          setDigitalLedStates(false, false, true, true, false); // **GB*
+          break;
+
+        case 3:
           setDigitalLedStates(false, false, false, true, true); // ***BW
           break;
 
-        case 5:
-          setDigitalLedStates(true, false, true, false, false); // R*G**
-          break;
-
-        case 6:
-          setDigitalLedStates(false, true, false, true, false); // *A*B*
-          break;
-
-        case 7:
-          setDigitalLedStates(false, false, true, false, true); // **G*W
-          break;
-
-        case 8:
-          setDigitalLedStates(true, false, false, true, false); // R**B*
-          break;
-
-        case 9:
-          setDigitalLedStates(false, true, false, false, true); // *A**W
-          break;
-      }
-    }
-
-    virtual uint32_t getStateDuration(uint8_t stateIndex) {
-      return _stateDuration;
-    }
-
-  public:
-    // There are 10 unique combinations of 2 LEDs from 5 leds in total:
-    // 0: RA***
-    // 1: **GB*
-    // 2: R***W
-    // 3: *AG**
-    // 4: ***BW
-    // 5: R*G**
-    // 6: *A*B*
-    // 7: **G*W
-    // 8: R**B*
-    // 9: *A**W
-    
-    TwoLedCombinationsController(uint32_t timePerState)
-      : StatefulController(10), _stateDuration(timePerState) {}
-};
-
-class FlowingThreeLedsController : public StatefulController {
-  private:
-    uint32_t _stateDuration;
-  
-  protected:
-    virtual void applyLedStatesForState(uint8_t stateIndex) {
-      switch (stateIndex) {
-        case 0:
-          setDigitalLedStates(true, true, true, false, false); // RAG**
-          break;
-
-        case 1:
-          setDigitalLedStates(false, true, true, true, false); // *AGB*
-          break;
-
-        case 2:
-          setDigitalLedStates(false, false, true, true, true); // **GBW
-          break;
-
-        case 3:
-          setDigitalLedStates(true, false, false, true, true); // R**BW
-          break;
-
         case 4:
-          setDigitalLedStates(true, true, false, false, true); // RA**W
+          setDigitalLedStates(true, false, false, false, true); // R***W
           break;
       }
     }
@@ -339,79 +329,8 @@ class FlowingThreeLedsController : public StatefulController {
     }
 
   public:
-    FlowingThreeLedsController(uint32_t timePerState) 
+    FlowingTwoLedsController(uint32_t timePerState) 
       : StatefulController(5), _stateDuration(timePerState) {}
-};
-
-class TwoLedCombinationsFadeOutThenInController : public StatefulController {
-  private:
-    uint32_t _fadeOutDuration;
-    uint32_t _sustainAfterFadeOutDuration;
-    uint32_t _fadeInDuration;
-    uint32_t _sustainAfterFadeInDuration;
-
-    AnalogLedsState getLedsStateForState(uint8_t stateIndex) {
-      // States for this controller follow in pairs: RAGBW -> (some state) and (some state) -> RAGBW.
-      // This method just defines what this (some state) should be.
-      
-      switch (stateIndex / 2) {
-        case 0:
-          return analogLedsState(0.0, 0.0, 1.0, 1.0, 1.0); // **GBW
-
-        case 1:
-          return analogLedsState(1.0, 1.0, 0.0, 0.0, 1.0); // RA**W
-
-        case 2:
-          return analogLedsState(0.0, 1.0, 1.0, 1.0, 0.0); // *AGB*
-
-        case 3:
-          return analogLedsState(1.0, 0.0, 0.0, 1.0, 1.0); // R**BW
-
-        case 4:
-          return analogLedsState(1.0, 1.0, 1.0, 0.0, 0.0); // RAG**
-
-        case 5:
-          return analogLedsState(0.0, 1.0, 0.0, 1.0, 1.0); // *A*BW
-
-        case 6:
-          return analogLedsState(1.0, 0.0, 1.0, 0.0, 1.0); // R*G*W
-
-        case 7:
-          return analogLedsState(1.0, 1.0, 0.0, 1.0, 0.0); // RA*B*
-
-        case 8:
-          return analogLedsState(0.0, 1.0, 1.0, 0.0, 1.0); // *AG*W
-
-        case 9:
-          return analogLedsState(1.0, 0.0, 1.0, 1.0, 0.0); // R*GB*
-
-        default:
-          return allLedsOff();
-      }
-    }
-
-  protected:
-    virtual void applyLedStatesForState(uint8_t stateIndex) {
-      AnalogLedsState targetLedsState = getLedsStateForState(stateIndex);
-
-      if (stateIndex % 2 == 0) {
-        startFadeOutFromAllLeds(_fadeOutDuration, targetLedsState);
-      } else {
-        startFadeInToAllLeds(_fadeInDuration, targetLedsState);
-      }
-    }
-
-    virtual uint32_t getStateDuration(uint8_t stateIndex) {
-      if (stateIndex % 2 == 0) {
-        return _fadeOutDuration + _sustainAfterFadeOutDuration;
-      } else {
-        return _fadeInDuration + _sustainAfterFadeInDuration;
-      }
-    }
-
-  public:
-    TwoLedCombinationsFadeOutThenInController(uint32_t fadeOutDuration, uint32_t sustainAfterFadeOutDuration, uint32_t fadeInDuration, uint32_t sustainAfterFadeInDuration)
-      : StatefulController(20), _fadeOutDuration(fadeOutDuration), _sustainAfterFadeOutDuration(sustainAfterFadeOutDuration), _fadeInDuration(fadeInDuration), _sustainAfterFadeInDuration(sustainAfterFadeInDuration) {}
 };
 
 class SequentialFadeController : public StatefulController {
@@ -505,117 +424,261 @@ class SequentialFadeController : public StatefulController {
       _fadeOutDuration(fadeOutDuration), _sustainAfterFadeOutDuration(sustainAfterFadeOutDuration), _delayAfterFadingOutAllLeds(delayAfterFadingOutAllLeds) {}
 };
 
-class OneByOneFadeController : public StatefulController {
+class SloGloController : public StatefulController {
   private:
-    uint32_t _singleLedFadeInDuration;
-    uint32_t _singleLedSustainAfterFadeInDuration;
-    uint32_t _singleLedFadeOutDuration;
-    uint32_t _singleLedSustainAfterFadeOutDuration;
-    uint32_t _allLedsFadeInDuration;
-    uint32_t _allLedsSustainAfterFadeInDuration;
-    uint32_t _allLedsFadeOutDuration;
-    uint32_t _allLedsSustainAfterFadeOutDuration;
+    uint32_t _transitionDuration;
+    uint32_t _sustainDuration;
 
-    void startSingleLedFadeIn(AnalogLedsState target) {
-      startFadeInFromNoneLeds(_singleLedFadeInDuration, target);
-    }
+    AnalogLedsState getLedStatesForState(uint8_t stateIndex) {
+      if (stateIndex >= 5) {
+        stateIndex -= 5;
+      }
+      
+      switch (stateIndex) {
+        case 0:
+          return analogLedsState(1.0, 0.0, 0.0, 0.0, 0.0); // R****
 
-    void startSingleLedFadeOut(AnalogLedsState initial) {
-      startFadeOutToNoneLeds(_singleLedFadeOutDuration, initial);
-    }
+        case 1:
+          return analogLedsState(0.0, 1.0, 0.0, 0.0, 0.0); // *A***
 
-    void startAllLedsFadeIn() {
-      startFadeInFromNoneLeds(_allLedsFadeInDuration, allLedsOn());
-    }
+        case 2:
+          return analogLedsState(0.0, 0.0, 1.0, 0.0, 0.0); // **G**
 
-    void startAllLedsFadeOut() {
-      startFadeOutToNoneLeds(_allLedsFadeOutDuration, allLedsOn());
-    }
+        case 3:
+          return analogLedsState(0.0, 0.0, 0.0, 1.0, 0.0); // ***B*
 
-    AnalogLedsState getLedsStateForSingleLedFadeState(uint8_t stateIndex) {
-      // Single LED transitions go in pairs in this controller: ***** -> (some state) and (someState) -> *****.
-      // This method calculates (some state) for given state index if it corresponds to single LED transition.
-
-      if (stateIndex < 10) {
-        uint8_t transitionIndex = stateIndex / 2;
-
-        switch (transitionIndex) {
-          case 0:
-            return analogLedsState(1.0, 0.0, 0.0, 0.0, 0.0); // R****
-
-          case 1:
-            return analogLedsState(0.0, 1.0, 0.0, 0.0, 0.0); // *A***
-
-          case 2:
-            return analogLedsState(0.0, 0.0, 1.0, 0.0, 0.0); // **G**
-
-          case 3:
-            return analogLedsState(0.0, 0.0, 0.0, 1.0, 0.0); // ***B*
-
-          case 4:
-            return analogLedsState(0.0, 0.0, 0.0, 0.0, 1.0); // ****W
-        }
-      } 
+        case 4:
+          return analogLedsState(0.0, 0.0, 0.0, 0.0, 1.0); // ****W
+      }
 
       return allLedsOff();
     }
 
   protected:
     virtual void applyLedStatesForState(uint8_t stateIndex) {
-      if (stateIndex < 10) {
-        AnalogLedsState targetState = getLedsStateForSingleLedFadeState(stateIndex);
+      AnalogLedsState currentState = getLedStatesForState(stateIndex);
+      AnalogLedsState nextState = getLedStatesForState(stateIndex + 1);
 
-        if (stateIndex % 2 == 0) {
-          startSingleLedFadeIn(targetState);
+      startPwmTransition(_transitionDuration, currentState, nextState);
+    }
+
+    virtual uint32_t getStateDuration(uint8_t stateIndex) {
+      return _transitionDuration + _sustainDuration;
+    }
+
+  public:
+    SloGloController(uint32_t transitionDuration, uint32_t sustainDuration)
+      : StatefulController(5), _transitionDuration(transitionDuration), _sustainDuration(sustainDuration) {}
+};
+
+class ChasingFlashController : public StatefulController {
+  private:
+    uint32_t _flashDuration;
+    uint32_t _flashLoopsCount;
+    uint32_t _chaseDuration;
+    uint32_t _chaseTransitionDuration;
+    uint32_t _chaseLoopsCount;
+
+    void setLedStatesForFlashingState(uint8_t stateIndex) {
+      uint32_t flashingStateIndex = stateIndex / _flashLoopsCount;
+      uint32_t flashingStatePhaseIndex = (stateIndex % _flashLoopsCount) % 2;
+
+      if (flashingStateIndex == 0) {
+        if (flashingStatePhaseIndex == 0) {
+          setDigitalLedStates(false, true, false, false, false); // *A***
         } else {
-          startSingleLedFadeOut(targetState);
+          setDigitalLedStates(true, false, false, false, false); // R****
         }
-      } else if (stateIndex == 10) {
-        startAllLedsFadeIn();
-      } else if (stateIndex == 11) {
-        startAllLedsFadeOut();
+      } else if (flashingStateIndex == 1) {
+        if (flashingStatePhaseIndex == 0) {
+          setDigitalLedStates(false, false, true, false, false); // **G**
+        } else {
+          setDigitalLedStates(false, true, false, false, false); // *A***
+        }
+      } else if (flashingStateIndex == 2) {
+        if (flashingStatePhaseIndex == 0) {
+          setDigitalLedStates(false, false, false, true, false); // ***B*
+        } else {
+          setDigitalLedStates(false, false, true, false, false); // **G**
+        }
+      } else if (flashingStateIndex == 3) {
+        if (flashingStatePhaseIndex == 0) {
+          setDigitalLedStates(false, false, false, false, true); // ****W
+        } else {
+          setDigitalLedStates(false, false, false, true, false); // ***B*
+        }
+      } else if (flashingStateIndex == 4) {
+        if (flashingStatePhaseIndex == 0) {
+          setDigitalLedStates(true, false, false, false, false); // R****
+        } else {
+          setDigitalLedStates(false, false, false, false, true); // ****W
+        }
+      }
+    }
+
+    AnalogLedsState getLedsStateForChasingState(uint8_t stateIndex) {
+      uint8_t chasePhaseIndex = stateIndex % 5;
+
+      switch (chasePhaseIndex) {
+        case 0:
+          return analogLedsState(1.0, 1.0, 0.0, 0.0, 0.0); // RA***
+
+        case 1:
+          return analogLedsState(0.0, 1.0, 1.0, 0.0, 0.0); // *AG**
+
+        case 2:
+          return analogLedsState(0.0, 0.0, 1.0, 1.0, 0.0); // **GB*
+
+        case 3:
+          return analogLedsState(0.0, 0.0, 0.0, 1.0, 1.0); // ***BW
+
+        case 4:
+          return analogLedsState(1.0, 0.0, 0.0, 1.0, 1.0); // R***W
+      }
+    }
+
+    void setLedStatesForChasingState(uint8_t stateIndex) {
+      AnalogLedsState currentState = getLedsStateForChasingState(stateIndex);
+      AnalogLedsState nextState = getLedsStateForChasingState(stateIndex + 1);
+
+      startPwmTransition(_chaseTransitionDuration, currentState, nextState);
+    }
+
+  protected:
+    virtual void applyLedStatesForState(uint8_t stateIndex) {
+      uint32_t flashingStatesCount = _flashLoopsCount * 5;
+
+      if (stateIndex < flashingStatesCount) {
+        setLedStatesForFlashingState(stateIndex);
+      } else {
+        uint8_t chasingStateIndex = stateIndex - flashingStatesCount;
+        setLedStatesForChasingState(chasingStateIndex);
       }
     }
 
     virtual uint32_t getStateDuration(uint8_t stateIndex) {
-      if (stateIndex == 10) { // all LEDs fade in
-        return _allLedsFadeInDuration + _allLedsSustainAfterFadeInDuration;
-      } else if (stateIndex == 11) { // all LEDs fade out
-        return _allLedsFadeOutDuration + _allLedsSustainAfterFadeOutDuration;
-      } else if (stateIndex % 2 == 0) { // single LED fade in
-        return _singleLedFadeInDuration + _singleLedSustainAfterFadeInDuration;
-      } else { // single LED fade out
-        return _singleLedFadeOutDuration + _singleLedSustainAfterFadeOutDuration;
+      if (stateIndex < _flashLoopsCount * 5) {
+        return _flashDuration;
+      } else {
+        return _chaseDuration;
       }
     }
 
   public:
-    OneByOneFadeController(
-      uint32_t singleLedFadeInDuration, uint32_t singleLedSustainAfterFadeInDuration, uint32_t singleLedFadeOutDuration, uint32_t singleLedSustainAfterFadeOutDuration,
-      uint32_t allLedsFadeInDuration, uint32_t allLedsSustainAfterFadeInDuration, uint32_t allLedsFadeOutDuration, uint32_t allLedsSustainAfterFadeOutDuration)
-      : StatefulController(12),
-      _singleLedFadeInDuration(singleLedFadeInDuration), _singleLedSustainAfterFadeInDuration(singleLedSustainAfterFadeInDuration), 
-      _singleLedFadeOutDuration(singleLedFadeOutDuration), _singleLedSustainAfterFadeOutDuration(singleLedSustainAfterFadeOutDuration),
-      _allLedsFadeInDuration(allLedsFadeInDuration), _allLedsSustainAfterFadeInDuration(allLedsSustainAfterFadeInDuration),
-      _allLedsFadeOutDuration(allLedsFadeOutDuration), _allLedsSustainAfterFadeOutDuration(allLedsSustainAfterFadeOutDuration) {}
+    ChasingFlashController(uint32_t flashDuration, uint32_t flashLoopsCount, uint32_t chaseDuration, uint32_t chaseTransitionDuration, uint32_t chaseLoopsCount)
+      : StatefulController(flashLoopsCount * 5 + chaseLoopsCount * 5), _flashDuration(flashDuration), _flashLoopsCount(flashLoopsCount), _chaseDuration(chaseDuration), _chaseTransitionDuration(chaseTransitionDuration), _chaseLoopsCount(chaseLoopsCount) {}
 };
 
-TwoLedCombinationsController slowTwoLedCombinationsController(1000);
-LoopingController slowTwoLedCombinationsControllerLoop(&slowTwoLedCombinationsController, 2);
+class LedBrightnessTestingController : public StatefulController {
+  private:
+    uint32_t _singleLedDuration;
+    uint32_t _allLedsDuration;
 
-TwoLedCombinationsController fastTwoLedCombinationsController(500);
-LoopingController fastTwoLedCombinationsControllerLoop(&fastTwoLedCombinationsController, 4);
+  protected:
+    virtual void applyLedStatesForState(uint8_t stateIndex) {
+      switch (stateIndex) {
+        case 0:
+          setDigitalLedStates(true, false, false, false, false); // R****
+          break;
 
-FlowingThreeLedsController flowingThreeLedsController(100);
-LoopingController flowingThreeLedsControllerLoop(&flowingThreeLedsController, 20);
+        case 1:
+          setDigitalLedStates(false, true, false, false, false); // *A***
+          break;
 
-TwoLedCombinationsFadeOutThenInController twoLedCombinationsFadeOutThenInController(150, 100, 150, 100);
-LoopingController twoLedCombinationsFadeOutThenInControllerLoop(&twoLedCombinationsFadeOutThenInController, 4);
+        case 2:
+          setDigitalLedStates(false, false, true, false, false); // **G**
+          break;
 
-SequentialFadeController sequentialFadeController(150, 50, 1000, 300, 100, 1000);
-LoopingController sequentialFadeControllerLoop(&sequentialFadeController, 3);
+        case 3:
+          setDigitalLedStates(false, false, false, true, false); // ***B*
+          break;
 
-OneByOneFadeController oneByOneFadeController(1000, 2000, 1000, 0, 3000, 5000, 3000, 1000);
+        case 4:
+          setDigitalLedStates(false, false, false, false, true); // ****W
+          break;
+
+        case 5:
+          setDigitalLedStates(true, true, true, true, true); // RAGBW
+          break;
+      }
+    }
+
+    virtual uint32_t getStateDuration(uint8_t stateIndex) {
+      if (stateIndex == 5) {
+        return _allLedsDuration;
+      } else {
+        return _singleLedDuration;
+      }
+    }
+
+  public:
+    LedBrightnessTestingController(uint32_t singleLedDuration, uint32_t allLedsDuration)
+      : StatefulController(6), _singleLedDuration(singleLedDuration), _allLedsDuration(allLedsDuration) {}
+};
+
+class AllInOneFadeController : public StatefulController {
+  private:
+    uint32_t _fadeInDuration;
+    uint32_t _sustainDuration;
+    uint32_t _fadeOutDuration;
+    uint32_t _offDuration;
+
+  protected:
+    virtual void applyLedStatesForState(uint8_t stateIndex) {
+      AnalogLedsState onState = analogLedsState(1.0, 1.0, 1.0, 1.0, 1.0);  // RAGBW
+      AnalogLedsState offState = analogLedsState(0.0, 0.0, 0.0, 0.0, 0.0); // *****
+      
+      if (stateIndex == 0) {
+        startPwmTransition(_fadeInDuration, offState, onState);
+      } else if (stateIndex == 1) {
+        startPwmTransition(_fadeOutDuration, onState, offState);
+      }
+    }
+
+    virtual uint32_t getStateDuration(uint8_t stateIndex) {
+      if (stateIndex == 0) {
+        return _fadeInDuration + _sustainDuration;
+      } else {
+        return _fadeOutDuration + _offDuration;
+      }
+    }
+
+  public:
+    AllInOneFadeController(uint32_t fadeInDuration, uint32_t sustainDuration, uint32_t fadeOutDuration, uint32_t offDuration) 
+      : StatefulController(2), _fadeInDuration(fadeInDuration), _sustainDuration(sustainDuration), _fadeOutDuration(fadeOutDuration), _offDuration(offDuration) {}
+};
+
+CombinationController combinationController(60, 60); // final
+LoopingController combinationControllerLoop(&combinationController, 25);
+
+CombinationController slowCombinationController(90, 90);
+LoopingController slowCombinationControllerLoop(&slowCombinationController, 16);
+
+FlowingTwoLedsController slowFlowingTwoLedsController(500);
+LoopingController slowFlowingTwoLedsControllerLoop(&slowFlowingTwoLedsController, 6);
+
+FlowingTwoLedsController mediumFlowingTwoLedsController(250);
+LoopingController mediumFlowingTwoLedsControllerLoop(&mediumFlowingTwoLedsController, 12);
+
+FlowingTwoLedsController fastFlowingTwoLedsController(120);
+LoopingController fastFlowingTwoLedsControllerLoop(&fastFlowingTwoLedsController, 24);
+
+SloGloController sloGloController(3000, 0);
+LoopingController sloGloControllerLoop(&sloGloController, 1);
+
+SloGloController fastGloController(1500, 0);
+LoopingController fastGloControllerLoop(&fastGloController, 2);
+
+ChasingFlashController chasingFlashController(50, 4, 100, 30, 4);
+LoopingController chasingFlashControllerLoop(&chasingFlashController, 4);
+
+AllInOneFadeController slowAllInOneFadeController(6000, 0, 6000, 0);
+LoopingController slowAllInOneFadeControllerLoop(&slowAllInOneFadeController, 1);
+
+AllInOneFadeController fastAllInOneFadeController(3000, 0, 3000, 0);
+LoopingController fastAllInOneFadeControllerLoop(&fastAllInOneFadeController, 2);
+
+// LedBrightnessTestingController ledBrightnessTestingController(500, 2500);
 
 class SwitchingController : public ILedController {
   private:
@@ -623,32 +686,43 @@ class SwitchingController : public ILedController {
 
     ILedController* getControllerByIndex(uint8_t index) {
       switch (index) {
-        // TODO: fix order after debugging
         case 0:
-          return &slowTwoLedCombinationsControllerLoop;
+          return &combinationControllerLoop;
 
         case 1:
-          return &fastTwoLedCombinationsControllerLoop;
+          return &slowCombinationControllerLoop;
 
         case 2:
-          return &sequentialFadeControllerLoop;
+          return &slowFlowingTwoLedsControllerLoop;
 
         case 3:
-          return &flowingThreeLedsControllerLoop;
+          return &mediumFlowingTwoLedsControllerLoop;
 
         case 4:
-          return &twoLedCombinationsFadeOutThenInControllerLoop;
+          return &fastFlowingTwoLedsControllerLoop;
 
         case 5:
-          return &oneByOneFadeController;
+          return &sloGloControllerLoop;
 
+        case 6:
+          return &fastGloControllerLoop;
+
+        case 7:
+          return &chasingFlashControllerLoop;
+
+        case 8:
+          return &slowAllInOneFadeControllerLoop;
+
+        case 9:
+          return &fastAllInOneFadeControllerLoop;
+          
         default:
           return NULL;
       }
     }
 
     uint8_t getControllerCount() {
-      return 6;
+      return 10;
     }
 
     void switchToController(uint8_t controllerIndex) {
@@ -724,6 +798,7 @@ void loop() {
     WorkState result = mainController.doControl(sleepTime);
     sleepTime = result.suggestedSleepTime;
     
-    sleep.sleepDelay(sleepTime);
+    //sleep.sleepDelay(sleepTime);
+    delay(sleepTime);
   } while(true);
 }
